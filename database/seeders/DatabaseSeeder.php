@@ -15,7 +15,7 @@ class DatabaseSeeder extends Seeder
         // 1. Create the Owner
         User::create([
             'name' => 'Shop Owner',
-            'email' => 'owner@delivergate.com',
+            'email' => 'owner@frozenworld.com',
             'password' => Hash::make('password'),
             'role' => 'owner',
         ]);
@@ -23,7 +23,7 @@ class DatabaseSeeder extends Seeder
         // 2. Create the Manager
         User::create([
             'name' => 'Shop Manager',
-            'email' => 'manager@delivergate.com',
+            'email' => 'manager@frozenworld.com',
             'password' => Hash::make('password'),
             'role' => 'manager',
         ]);
@@ -31,7 +31,7 @@ class DatabaseSeeder extends Seeder
         // 3. Create the Cashier
         User::create([
             'name' => 'Shop Cashier',
-            'email' => 'cashier@delivergate.com',
+            'email' => 'cashier@frozenworld.com',
             'password' => Hash::make('password'),
             'role' => 'cashier',
         ]);
@@ -47,7 +47,7 @@ class DatabaseSeeder extends Seeder
             InventoryItem::create($item);
         }
 
-        // 3. Seed dummy Customers
+        // 5. Seed dummy Customers
         $customers = [
             ['name' => 'Nimal Perera', 'email' => 'nimal@example.com', 'phone' => '0771112223'],
             ['name' => 'Sunil Silva', 'email' => 'sunil@example.com', 'phone' => '0714445556'],
@@ -57,6 +57,5 @@ class DatabaseSeeder extends Seeder
         foreach ($customers as $customer) {
             Customer::create($customer);
         }
-
     }
 }
