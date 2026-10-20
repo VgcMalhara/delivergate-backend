@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\Customer;
 use App\Models\User;
 use App\Models\InventoryItem;
 use Illuminate\Database\Seeder;
@@ -45,5 +46,17 @@ class DatabaseSeeder extends Seeder
         foreach ($items as $item) {
             InventoryItem::create($item);
         }
+
+        // 3. Seed dummy Customers
+        $customers = [
+            ['name' => 'Nimal Perera', 'email' => 'nimal@example.com', 'phone' => '0771112223'],
+            ['name' => 'Sunil Silva', 'email' => 'sunil@example.com', 'phone' => '0714445556'],
+            ['name' => 'Kamal Fernando', 'email' => 'kamal@example.com', 'phone' => '0707778889'],
+        ];
+
+        foreach ($customers as $customer) {
+            Customer::create($customer);
+        }
+
     }
 }

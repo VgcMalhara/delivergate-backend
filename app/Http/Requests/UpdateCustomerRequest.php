@@ -2,28 +2,24 @@
 
 namespace App\Http\Requests;
 
-use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
 class UpdateCustomerRequest extends FormRequest
 {
-    /**
-     * Determine if the user is authorized to make this request.
-     */
     public function authorize(): bool
     {
-        return false;
+        return true;
     }
 
-    /**
-     * Get the validation rules that apply to the request.
-     *
-     * @return array<string, ValidationRule|array<mixed>|string>
-     */
     public function rules(): array
     {
+        // Get the customer ID from the route to ignore it in the unique check
+        $customerId = $this->route('customer')->id;
+
         return [
-            //
+            'name' => 'sometimes|required|string|max:255',
+            'email' => 'nullable|email|unique:customers,email,' . $customerId,
+            'phone' => 'nullable|string|max:20',
         ];
     }
 }

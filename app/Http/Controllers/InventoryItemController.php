@@ -4,62 +4,63 @@ namespace App\Http\Controllers;
 
 use App\Models\InventoryItem;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
+use App\Http\Requests\StoreInventoryItemRequest;
+use App\Http\Requests\UpdateInventoryItemRequest;
+use App\Http\Resources\InventoryItemResource;
 
 class InventoryItemController extends Controller
 {
     /**
-     * Display a listing of the resource.
+     * Display a listing of the inventory items.
      */
-    public function index()
+    public function index(Request $request)
     {
-        //
+        Gate::authorize('viewAny', InventoryItem::class);
+        $query = InventoryItem::query();
+        if ($request->has('search')) {
+            $query->where('name', 'like', '%' . $request->search . '%');
+        }
+
+        return InventoryItemResource::collection($query->get());
     }
 
     /**
-     * Show the form for creating a new resource.
+     * Store a newly created inventory item in the database.
      */
-    public function create()
+    public function store(StoreInventoryItemRequest $request)
     {
-        //
+        Gate::authorize('create', InventoryItem::class);
+        $item = InventoryItem::create($request->validated());
+        return new InventoryItemResource($item);
     }
 
     /**
-     * Store a newly created resource in storage.
+     * Display the specified inventory item.
      */
-    public function store(Request $request)
+    public function show(InventoryItem $item)
     {
-        //
+        Gate::authorize('view', $item);
+        return new InventoryItemResource($item);
     }
 
     /**
-     * Display the specified resource.
+     * Update the specified inventory item in the database.
      */
-    public function show(InventoryItem $inventoryItem)
+    public function update(UpdateInventoryItemRequest $request, InventoryItem $item)
     {
-        //
+        Gate::authorize('update', $item);
+        $item->update($request->validated());
+        return new InventoryItemResource($item);
     }
 
     /**
-     * Show the form for editing the specified resource.
+     * Remove the specified inventory item from the database (Soft Delete).
      */
-    public function edit(InventoryItem $inventoryItem)
+    public function destroy(InventoryItem $item)
     {
-        //
-    }
-
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, InventoryItem $inventoryItem)
-    {
-        //
-    }
-
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(InventoryItem $inventoryItem)
-    {
-        //
+        Gate::authorize('delete', $item);
+        $item->delete();
+        return response()->json(['message' => 'Item deleted successfully']);
     }
 }
