@@ -3,23 +3,47 @@
 namespace Database\Seeders;
 
 use App\Models\User;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
+use App\Models\InventoryItem;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Hash;
 
 class DatabaseSeeder extends Seeder
 {
-    use WithoutModelEvents;
-
-    /**
-     * Seed the application's database.
-     */
     public function run(): void
     {
-        // User::factory(10)->create();
-
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
+        // 1. Create the Owner
+        User::create([
+            'name' => 'Shop Owner',
+            'email' => 'owner@delivergate.com',
+            'password' => Hash::make('password'),
+            'role' => 'owner',
         ]);
+
+        // 2. Create the Manager
+        User::create([
+            'name' => 'Shop Manager',
+            'email' => 'manager@delivergate.com',
+            'password' => Hash::make('password'),
+            'role' => 'manager',
+        ]);
+
+        // 3. Create the Cashier
+        User::create([
+            'name' => 'Shop Cashier',
+            'email' => 'cashier@delivergate.com',
+            'password' => Hash::make('password'),
+            'role' => 'cashier',
+        ]);
+
+        // 4. Seed some dummy Inventory Items
+        $items = [
+            ['name' => 'Vanilla Bean', 'category' => 'Vanilla', 'price' => 450.00, 'quantity' => 50],
+            ['name' => 'Dark Chocolate', 'category' => 'Chocolate', 'price' => 550.00, 'quantity' => 30],
+            ['name' => 'Strawberry Swirl', 'category' => 'Strawberry', 'price' => 480.00, 'quantity' => 40],
+        ];
+
+        foreach ($items as $item) {
+            InventoryItem::create($item);
+        }
     }
 }
