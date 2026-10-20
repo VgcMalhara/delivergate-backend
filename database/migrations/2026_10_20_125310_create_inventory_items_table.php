@@ -13,7 +13,12 @@ return new class extends Migration
     {
         Schema::create('inventory_items', function (Blueprint $table) {
             $table->id();
+            $table->string('name')->index(); // Indexed for faster searching
+            $table->string('category'); // e.g., Vanilla, Chocolate
+            $table->decimal('price', 8, 2); // 8 digits total, 2 after decimal
+            $table->integer('quantity')->default(0);
             $table->timestamps();
+            $table->softDeletes();
         });
     }
 
