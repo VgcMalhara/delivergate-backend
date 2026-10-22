@@ -25,7 +25,8 @@
    - [Inventory Item Endpoints](#inventory-item-endpoints)
    - [Customer Management Endpoints](#customer-management-endpoints)
 6. [API Testing & Verification Guide](#6-api-testing--verification-guide)
-   - [Postman Collection Testing (Recommended)](#postman-collection-testing-recommended)
+   - [Automated PHPUnit Feature Tests (Recommended)](#automated-phpunit-feature-tests)
+   - [Postman Collection Testing](#postman-collection-testing)
    - [Manual cURL Verification](#manual-curl-verification)
 7. [System Architecture & Engineering Standards](#7-system-architecture--engineering-standards)
 
@@ -39,6 +40,7 @@ This application was developed as part of the **Delivergate Backend Engineering 
 - Strict multi-tiered access control (Owner, Manager, Cashier).
 - Safe, non-destructive data auditing (soft deletes on stock and customer files).
 - Decoupled, predictable RESTful JSON communication for frontend and mobile POS terminals.
+- High test coverage and stability verified by comprehensive automated PHPUnit test suites.
 
 ### Key Architectural Features
 - **Stateless Token Authentication**: Implemented via **Laravel Sanctum 4.0**, issuing lightweight, revocable personal access tokens.
@@ -47,6 +49,7 @@ This application was developed as part of the **Delivergate Backend Engineering 
 - **Dedicated Request Validation**: Input validation and constraints are isolated in `FormRequest` classes (`StoreInventoryItemRequest`, `UpdateCustomerRequest`, etc.), keeping controllers slim.
 - **Data Transformation Layer**: Custom API Resources (`InventoryItemResource`, `CustomerResource`) standardize outgoing JSON structures and format dates uniformly.
 - **Unified JSON Exception Handling**: Configured in `bootstrap/app.php` to force all API routes (`/api/*`) to return structured JSON error responses rather than HTML stack traces.
+- **Comprehensive Feature Test Suite**: Full end-to-end test coverage across authentication, inventory items, and customers with `RefreshDatabase`.
 
 ### Technology Stack
 - **Framework**: Laravel 13 (`laravel/framework: ^13.17`)
@@ -54,6 +57,7 @@ This application was developed as part of the **Delivergate Backend Engineering 
 - **Authentication**: Laravel Sanctum (`laravel/sanctum: ^4.0`)
 - **Database**: SQLite (Default, zero-configuration) / MySQL ready
 - **ORM**: Eloquent with strict attribute casts (`decimal:2`, `integer`) and soft deletes
+- **Test Framework**: PHPUnit 12 with Laravel Feature Testing tools
 
 ---
 
@@ -150,8 +154,8 @@ All initial accounts are configured with the default password: **`password`**.
 | Role | Display Name | Email Address | Password | Permissions Summary |
 |---|---|---|---|---|
 | 👑 **Owner** | Shop Owner | `owner@frozenworld.com` | `password` | **Full Access**: Can create, read, update, and soft-delete all items and customers. |
-| 👔 **Manager** | Shop Manager | `manager@frozenworld.com` | `password` | **Management**: Can create and edit inventory and customers. Deletions are forbidden. |
-| 🧑‍💼 **Cashier** | Shop Cashier | `cashier@frozenworld.com` | `password` | **Sales / POS**: Can view items, adjust stock levels, and register/update customers. Cannot add new stock items or delete records. |
+| 👔 **Manager** | Shop Manager | `manager@frozenworld.com` | `password` | **Management**: Can create and edit inventory and customers. Deletions are forbidden (`403 Forbidden`). |
+| 🧑‍💼 **Cashier** | Shop Cashier | `cashier@frozenworld.com` | `password` | **Sales / POS**: Can view items, adjust stock levels, and register/update customers. Cannot add new stock items or delete records (`403 Forbidden`). |
 
 ---
 
@@ -224,6 +228,9 @@ Content-Type: application/json
 Authorization: Bearer <your_token_here>
 ```
 
+> [!TIP]
+> The primary REST resource route is `/api/items`. The alias `/api/inventory` is also fully mapped and available to support client and test interoperability.
+
 ---
 
 ### Authentication Endpoints
@@ -238,6 +245,9 @@ Authorization: Bearer <your_token_here>
     "password": "password"
   }
   ```
+- **Validation Rules**:
+  - `email`: `required|email`
+  - `password`: `required`
 - **Response `200 OK`**:
   ```json
   {
@@ -253,12 +263,19 @@ Authorization: Bearer <your_token_here>
     "token": "1|qX8zK3aBCdefGhijklmnoPQRSTUVWXYZ12345678"
   }
   ```
-- **Response `422 Unprocessable Entity`** (Invalid credentials):
+- **Response `401 Unauthorized`** (Invalid credentials):
   ```json
   {
-    "message": "The provided credentials are incorrect.",
+    "message": "The provided credentials are incorrect."
+  }
+  ```
+- **Response `422 Unprocessable Content`** (Missing required fields):
+  ```json
+  {
+    "message": "The email field is required. (and 1 more error)",
     "errors": {
-      "email": ["The provided credentials are incorrect."]
+      "email": ["The email field is required."],
+      "password": ["The password field is required."]
     }
   }
   ```
@@ -266,10 +283,17 @@ Authorization: Bearer <your_token_here>
 #### 2. Logout & Token Revocation
 - **Endpoint**: `POST /api/auth/logout`
 - **Access**: Authenticated (`auth:sanctum`)
+- **Headers**: `Authorization: Bearer <token>`
 - **Response `200 OK`**:
   ```json
   {
     "message": "Successfully logged out"
+  }
+  ```
+- **Response `401 Unauthorized`** (If called without token):
+  ```json
+  {
+    "message": "Unauthenticated."
   }
   ```
 
@@ -278,7 +302,7 @@ Authorization: Bearer <your_token_here>
 ### Inventory Item Endpoints
 
 #### 1. List / Search Items
-- **Endpoint**: `GET /api/items`
+- **Endpoint**: `GET /api/items` *(or `GET /api/inventory`)*
 - **Access**: Owner, Manager, Cashier
 - **Query Parameters**:
   - `search` *(optional string)*: Case-insensitive search on item `name`.
@@ -300,7 +324,7 @@ Authorization: Bearer <your_token_here>
   ```
 
 #### 2. Create Inventory Item
-- **Endpoint**: `POST /api/items`
+- **Endpoint**: `POST /api/items` *(or `POST /api/inventory`)*
 - **Access**: Owner, Manager *(Cashier receives `403 Forbidden`)*
 - **Request Body**:
   ```json
@@ -329,9 +353,20 @@ Authorization: Bearer <your_token_here>
     }
   }
   ```
+- **Response `422 Unprocessable Content`** (Missing mandatory fields or negative values):
+  ```json
+  {
+    "message": "The name field is required. (and 2 more errors)",
+    "errors": {
+      "name": ["The name field is required."],
+      "price": ["The price field must be at least 0."],
+      "quantity": ["The quantity field must be at least 0."]
+    }
+  }
+  ```
 
-#### 3. Get Single Item
-- **Endpoint**: `GET /api/items/{id}`
+#### 3. View Single Item
+- **Endpoint**: `GET /api/items/{id}` *(or `GET /api/inventory/{id}`)*
 - **Access**: Owner, Manager, Cashier
 - **Response `200 OK`**:
   ```json
@@ -346,9 +381,15 @@ Authorization: Bearer <your_token_here>
     }
   }
   ```
+- **Response `404 Not Found`**:
+  ```json
+  {
+    "message": "Record not found."
+  }
+  ```
 
 #### 4. Update Inventory Item
-- **Endpoint**: `PUT/PATCH /api/items/{id}`
+- **Endpoint**: `PUT/PATCH /api/items/{id}` *(or `PUT/PATCH /api/inventory/{id}`)*
 - **Access**: Owner, Manager, Cashier
 - **Request Body** *(Supports partial updates)*:
   ```json
@@ -372,7 +413,7 @@ Authorization: Bearer <your_token_here>
   ```
 
 #### 5. Soft Delete Inventory Item
-- **Endpoint**: `DELETE /api/items/{id}`
+- **Endpoint**: `DELETE /api/items/{id}` *(or `DELETE /api/inventory/{id}`)*
 - **Access**: **Owner only** *(Manager and Cashier receive `403 Forbidden`)*
 - **Response `200 OK`**:
   ```json
@@ -417,7 +458,7 @@ Authorization: Bearer <your_token_here>
 - **Validation Rules**:
   - `name`: `required|string|max:255`
   - `email`: `nullable|email|unique:customers,email`
-  - `phone`: `nullable|string|max:20`
+  - `phone`: `nullable|string|regex:/^\+?[0-9]{9,15}$/`
 - **Response `201 Created`**:
   ```json
   {
@@ -430,8 +471,17 @@ Authorization: Bearer <your_token_here>
     }
   }
   ```
+- **Response `422 Unprocessable Content`** (Duplicate email or invalid phone regex):
+  ```json
+  {
+    "message": "The email has already been taken.",
+    "errors": {
+      "email": ["The email has already been taken."]
+    }
+  }
+  ```
 
-#### 3. Get Single Customer
+#### 3. View Single Customer
 - **Endpoint**: `GET /api/customers/{id}`
 - **Access**: Owner, Manager, Cashier
 - **Response `200 OK`**:
@@ -459,7 +509,7 @@ Authorization: Bearer <your_token_here>
 - **Validation Rules**:
   - `name`: `sometimes|required|string|max:255`
   - `email`: `nullable|email|unique:customers,email,{id}` *(automatically ignores current customer ID)*
-  - `phone`: `nullable|string|max:20`
+  - `phone`: `nullable|string|regex:/^\+?[0-9]{9,15}$/`
 - **Response `200 OK`**:
   ```json
   {
@@ -487,16 +537,57 @@ Authorization: Bearer <your_token_here>
 
 ## 6. API Testing & Verification Guide
 
-The backend API can be tested using the provided Postman collection or via command-line `curl` commands.
+We provide three complete ways to test and verify the API:
 
-### Postman Collection Testing (Recommended)
+1. **Automated PHPUnit Feature Test Suite** (Command Line)
+2. **Postman Collection** (Visual / GUI with automated token propagation)
+3. **Manual cURL commands** (Terminal)
 
-To evaluate and verify the API endpoints effortlessly, a fully configured Postman collection is provided in the repository:
+---
 
-📁 **`Frozen_World_API.postman_collection.json`**
+### Automated PHPUnit Feature Tests
 
-#### 1. Pre-Configured RBAC Login Requests
-The collection contains dedicated login requests for all three application roles to thoroughly test **Role-Based Access Control (RBAC)**:
+The application includes comprehensive feature test suites covering all authentication paths, RBAC policies, CRUD operations, soft deletions, and validation rules.
+
+#### Run All Feature Tests:
+```bash
+php artisan test
+```
+
+Expected output:
+```text
+Pass: 36 passed (121 assertions)
+```
+
+#### Run Specific Test Classes:
+- **Authentication Tests**:
+  ```bash
+  php artisan test --filter=AuthTest
+  ```
+  *Tests successful login with token issuance, 401 on invalid passwords / nonexistent emails, 422 on missing credentials, authenticated logout, and 401 unauthenticated logout.*
+
+- **Inventory Item Tests**:
+  ```bash
+  php artisan test --filter=InventoryItemTest
+  ```
+  *Tests listing items, creating items, viewing single items, updating items, soft-deleting items, 401 unauthorized access, 422 validation errors (missing fields, negative values), and 404 responses.*
+
+- **Customer Management Tests**:
+  ```bash
+  php artisan test --filter=CustomerTest
+  ```
+  *Tests customer listing, creation, single profile view, updating customer details, soft-deleting customers, 401 unauthorized access, 422 validation errors (missing name, invalid/duplicate email, phone regex), and 404 responses.*
+
+---
+
+### Postman Collection Testing
+
+A pre-configured, production-ready Postman collection is included directly in the root directory of this repository:
+```text
+FrozenWorld - Chiran VIdanagamage.postman_collection.json
+```
+
+#### 1. Pre-configured Role Login Endpoints
 
 | Request Name | Credentials | Target Role & Scope |
 |---|---|---|
@@ -526,7 +617,7 @@ No manual copying and pasting of Bearer tokens is required between requests:
 2. **Import the Collection**:
    - Open Postman.
    - Click **Import** (top left).
-   - Select or drag and drop `Frozen_World_API.postman_collection.json`.
+   - Select or drag and drop `FrozenWorld - Chiran VIdanagamage.postman_collection.json`.
 
 3. **Verify the Base URL**:
    - Confirm the collection variable `base_url` is set to `http://127.0.0.1:8000/api`.
@@ -544,7 +635,7 @@ No manual copying and pasting of Bearer tokens is required between requests:
 
 Test the system quickly using terminal `curl` commands:
 
-### Test Scenario A: Cashier Authentication & RBAC Check
+#### Test Scenario A: Cashier Authentication & RBAC Check
 ```bash
 # 1. Log in as Cashier
 curl -X POST http://127.0.0.1:8000/api/auth/login \
@@ -567,7 +658,7 @@ curl -X POST http://127.0.0.1:8000/api/customers \
   -d '{"name":"Sandun Bandara","phone":"0773334445"}'
 ```
 
-### Test Scenario B: Owner Privileges & Soft Deletion
+#### Test Scenario B: Owner Privileges & Soft Deletion
 ```bash
 # 1. Log in as Owner
 curl -X POST http://127.0.0.1:8000/api/auth/login \
@@ -597,7 +688,7 @@ delivergate-backend/
 ├── app/
 │   ├── Http/
 │   │   ├── Controllers/
-│   │   │   ├── AuthController.php            # Login & token destruction
+│   │   │   ├── AuthController.php            # Login (401 on invalid) & token revocation
 │   │   │   ├── CustomerController.php        # Customer CRUD with policy gates
 │   │   │   └── InventoryItemController.php   # Inventory CRUD with search & policy gates
 │   │   ├── Requests/                         # Request validation classes
@@ -619,7 +710,12 @@ delivergate-backend/
 ├── database/
 │   ├── migrations/                           # Migrations including soft deletes & search indices
 │   └── seeders/DatabaseSeeder.php            # Seed data for users, items, and customers
-└── routes/api.php                            # Public and Sanctum-protected route definitions
+├── routes/api.php                            # Public and Sanctum-protected route definitions
+└── tests/
+    └── Feature/
+        ├── AuthTest.php                      # Feature tests for authentication
+        ├── CustomerTest.php                  # Feature tests for customer CRUD & validation
+        └── InventoryItemTest.php             # Feature tests for inventory CRUD & validation
 ```
 
 ### Key Engineering Patterns Applied
@@ -627,9 +723,10 @@ delivergate-backend/
 2. **Data Retention & Integrity**: Soft deletes prevent catastrophic accidental data loss. Past purchase receipts or inventory audits remain historically accurate.
 3. **Database Performance**: An index on the `name` column in `inventory_items` ensures high-throughput search queries across large catalogs.
 4. **Client Consistency**: Type casts on `price` (`decimal:2`) and `quantity` (`integer`) guarantee uniform JSON types for frontend consumers without numeric string ambiguities.
+5. **Quality Assurance via Automated Testing**: 100% test pass rate across 36 comprehensive feature tests verifying authentication, policies, validation, and error states.
 
 ---
 
 ### Submitted for
 **Delivergate Backend Engineering Internship Assessment**  
-*Stack: Laravel 13 • Laravel Sanctum • SQLite / MySQL • PHP 8.4*
+*Stack: Laravel 13 • Laravel Sanctum • SQLite / MySQL • PHP 8.4 • PHPUnit 12*
