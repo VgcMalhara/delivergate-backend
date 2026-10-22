@@ -24,7 +24,9 @@
    - [Authentication Endpoints](#authentication-endpoints)
    - [Inventory Item Endpoints](#inventory-item-endpoints)
    - [Customer Management Endpoints](#customer-management-endpoints)
-6. [Testing & Verification Guide](#6-testing--verification-guide)
+6. [API Testing & Verification Guide](#6-api-testing--verification-guide)
+   - [Postman Collection Testing (Recommended)](#postman-collection-testing-recommended)
+   - [Manual cURL Verification](#manual-curl-verification)
 7. [System Architecture & Engineering Standards](#7-system-architecture--engineering-standards)
 
 ---
@@ -483,7 +485,62 @@ Authorization: Bearer <your_token_here>
 
 ---
 
-## 6. Testing & Verification Guide
+## 6. API Testing & Verification Guide
+
+The backend API can be tested using the provided Postman collection or via command-line `curl` commands.
+
+### Postman Collection Testing (Recommended)
+
+To evaluate and verify the API endpoints effortlessly, a fully configured Postman collection is provided in the repository:
+
+📁 **`Frozen_World_API.postman_collection.json`**
+
+#### 1. Pre-Configured RBAC Login Requests
+The collection contains dedicated login requests for all three application roles to thoroughly test **Role-Based Access Control (RBAC)**:
+
+| Request Name | Credentials | Target Role & Scope |
+|---|---|---|
+| **Auth - Login (Owner)** | `owner@frozenworld.com` / `password` | **Full Access**: Can perform all CRUD operations and soft-deletions on items and customers. |
+| **Auth - Login (Manager)** | `manager@frozenworld.com` / `password` | **Management**: Can create and update items and customers; deletions are forbidden (`403 Forbidden`). |
+| **Auth - Login (Cashier)** | `cashier@frozenworld.com` / `password` | **Sales / POS**: Can view items, adjust stock levels, and manage customers; creating stock items and deletions are forbidden (`403 Forbidden`). |
+
+#### 2. Automated Token Extraction & Inheritance
+No manual copying and pasting of Bearer tokens is required between requests:
+- **Post-Response Scripting**: Each login request includes an automated Postman test script that parses the JSON response, dynamically extracts the newly issued Sanctum Bearer token, and saves it into the collection variable `bearer_token`:
+  ```javascript
+  const response = pm.response.json();
+  if (response.token) {
+      pm.collectionVariables.set("bearer_token", response.token);
+  }
+  ```
+- **Automatic Authorization**: All subsequent CRUD endpoints (Inventory Items & Customer Management) are configured to inherit authentication from the parent collection (`Authorization: Bearer {{bearer_token}}`).
+- **Seamless Role Switching**: Running any one of the login requests (e.g., *Login as Cashier*) immediately updates the active authorization context for all subsequent requests.
+
+#### 3. Step-by-Step Testing Workflow
+1. **Start the Local Development Server**:
+   ```bash
+   php artisan serve
+   ```
+   Ensure the server is running at `http://127.0.0.1:8000`.
+
+2. **Import the Collection**:
+   - Open Postman.
+   - Click **Import** (top left).
+   - Select or drag and drop `Frozen_World_API.postman_collection.json`.
+
+3. **Verify the Base URL**:
+   - Confirm the collection variable `base_url` is set to `http://127.0.0.1:8000/api`.
+
+4. **Verify RBAC in Action**:
+   - **Step 1**: Send `Auth - Login (Cashier)`. The script automatically captures and sets the Cashier Bearer token.
+   - **Step 2**: Attempt `POST /api/items` (Create Item) $\rightarrow$ Returns **`403 Forbidden`** (Policy violation verified).
+   - **Step 3**: Send `Auth - Login (Owner)`. The active token is updated automatically.
+   - **Step 4**: Re-send `POST /api/items` $\rightarrow$ Returns **`201 Created`** (Authorized).
+   - **Step 5**: Send `DELETE /api/items/1` $\rightarrow$ Returns **`200 OK`** (Soft deletion verified).
+
+---
+
+### Manual cURL Verification
 
 Test the system quickly using terminal `curl` commands:
 
